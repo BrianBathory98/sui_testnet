@@ -1,59 +1,90 @@
 # sui_testnet
 ![petani](https://user-images.githubusercontent.com/41656124/214798958-c4590048-de30-48db-bd5a-5ca5e3bd66bd.jpg)
 
-# Install Sui node
-To setup Sui node follow the steps below
-
-## 1. Update packages
+## 1. Install Linux dependencies.
 ```
-sudo apt update && sudo apt upgrade -y
-```
-
-## 2. Install dependencies
-```
-sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.23.1/yq_linux_amd64 && chmod +x /usr/local/bin/yq
-sudo apt-get install jq -y
-```
-
-## 3. Download sui binaries
-```
-version=$(wget -qO- https://api.github.com/repos/SecorD0/Sui/releases/latest | jq -r ".tag_name")
-wget -qO- "https://github.com/SecorD0/Sui/releases/download/${version}/sui-linux-amd64-${version}.tar.gz" | sudo tar -C /usr/local/bin/ -xzf -
+sudo apt-get update \
+&& sudo apt-get install -y --no-install-recommends \
+tzdata \
+ca-certificates \
+build-essential \
+libssl-dev \
+libclang-dev \
+pkg-config \
+openssl \
+protobuf-compiler \
+cmake
 ```
 
-## 4. Download and update configs
+## 2. Install Rust.
 ```
-mkdir -p $HOME/.sui
-wget -qO $HOME/.sui/fullnode.yaml https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml
-wget -qO $HOME/.sui/genesis.blob https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
-yq -i ".db-path = \"$HOME/.sui/db\"" $HOME/.sui/fullnode.yaml
-yq -i '.metrics-address = "0.0.0.0:9184"' $HOME/.sui/fullnode.yaml
-yq -i '.json-rpc-address = "0.0.0.0:9000"' $HOME/.sui/fullnode.yaml
-yq -i ".genesis.genesis-file-location = \"$HOME/.sui/genesis.blob\"" $HOME/.sui/fullnode.yaml
+sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
+source $HOME/.cargo/env
+rustc --version
 ```
 
-## 5. Create sui service
+## 3. Clone GitHub SUI repository.
 ```
-sudo tee /etc/systemd/system/suid.service > /dev/null <<EOF
-[Unit]
-Description=Sui node
-After=network-online.target
+cd $HOME
+git clone https://github.com/MystenLabs/sui.git
+cd sui
+git remote add upstream https://github.com/MystenLabs/sui
+git fetch upstream
+git checkout -B testnet --track upstream/testnet
+```
+
+## 4. Create directory for SUI db and genesis.
+```
+mkdir $HOME/.sui
+```
+
+## 5. Download genesis file (instead of placeholder use the link to genesis you received in email).
+```
+wget -O $HOME/.sui/genesis.blob  https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+```
+
+## 6. Make a copy of fullnode.yaml and update path to db and genesis file in it.
+```
+cp $HOME/sui/crates/sui-config/data/fullnode-template.yaml $HOME/.sui/fullnode.yaml
+sed -i.bak "s|db-path:.*|db-path: \"$HOME\/.sui\/db\"| ; s|genesis-file-location:.*|genesis-file-location: \"$HOME\/.sui\/genesis.blob\"| ; s|127.0.0.1|0.0.0.0|" $HOME/.sui/fullnode.yaml
+```
+
+## 7. Build SUI binaries.
+```
+cargo build --release
+mv ~/sui/target/release/sui-node /usr/local/bin/
+mv ~/sui/target/release/sui /usr/local/bin/
+sui-node -V && sui -V
+```
+
+## 8. Create Service file for SUI Node.
+```
+echo "[Unit]
+Description=Sui Node
+After=network.target
 
 [Service]
 User=$USER
-ExecStart=$(which sui-node) --config-path $HOME/.sui/fullnode.yaml
+Type=simple
+ExecStart=/usr/local/bin/sui-node --config-path $HOME/.sui/fullnode.yaml
 Restart=on-failure
-RestartSec=3
 LimitNOFILE=65535
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target" > $HOME/suid.service
+
+mv $HOME/suid.service /etc/systemd/system/
+
+sudo tee <<EOF >/dev/null /etc/systemd/journald.conf
+Storage=persistent
 EOF
 ```
 
-## 6. Start sui node
+## 9. Start SUI Full Node in Service.
 ```
+sudo systemctl restart systemd-journald
 sudo systemctl daemon-reload
 sudo systemctl enable suid
 sudo systemctl restart suid
+journalctl -u suid -f
 ```
