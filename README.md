@@ -1,7 +1,5 @@
 # sui_testnet
-
-![image]petani(https://user-images.githubusercontent.com/41656124/214794023-1937d6a5-847b-4d1a-97c3-fbe228b4ec6b.jpg)
-
+![petani](https://user-images.githubusercontent.com/41656124/214798958-c4590048-de30-48db-bd5a-5ca5e3bd66bd.jpg)
 
 # Install Sui node
 To setup Sui node follow the steps below
